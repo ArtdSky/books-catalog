@@ -1,0 +1,99 @@
+version: '3'
+
+networks:
+  laravel:
+
+volumes:
+  bookbd:
+    driver: local
+
+services:
+  app:
+    build:
+      context: ./dockerfiles
+      dockerfile: nginx.dockerfile
+      args:
+        - UID=${UID:-1000}
+        - GID=${GID:-1000}
+    ports:
+      - "8080:80"
+    volumes:
+      - ./books-catalog-app:/var/www/html:delegated
+    depends_on:
+      - php
+      - pg
+    networks:
+      - laravel
+
+  pg:
+    image: postgres:13
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: bookscatalog
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+      SERVICE_TAGS: dev
+      SERVICE_NAME: postgres
+    volumes:
+      - bookbd:/var/lib/postgresql/data
+    networks:
+      - laravel
+
+  php:
+    build:
+      context: ./dockerfiles
+      dockerfile: php.root.dockerfile
+      args:
+        - UID=${UID:-1000}
+        - GID=${GID:-1000}
+    ports:
+      - "9000:9000"
+    volumes:
+      - ./books-catalog-app:/var/www/html:delegated
+    networks:
+      - laravel
+
+  composer:
+    build:
+      context: ./dockerfiles
+      dockerfile: php.root.dockerfile
+      args:
+        - UID=${UID:-1000}
+        - GID=${GID:-1000}
+    volumes:
+      - ./books-catalog-app:/var/www/html
+    depends_on:
+      - php
+    entrypoint: [ 'composer', '--ignore-platform-reqs' ]
+    networks:
+      - laravel
+
+  npm:
+    image: node:current-alpine
+    volumes:
+      - ./books-catalog-app:/var/www/html
+    ports:
+      - "3000:3000"
+      - "3001:3001"
+      - "5173:5173"
+    working_dir: /var/www/html
+    entrypoint: [ 'npm' ]
+    networks:
+      - laravel
+
+  artisan:
+    build:
+      context: ./dockerfiles
+      dockerfile: php.root.dockerfile
+      args:
+        - UID=${UID:-1000}
+        - GID=${GID:-1000}
+    volumes:
+      - ./books-catalog-app:/var/www/html:delegated
+    depends_on:
+      - pg
+    entrypoint: [ 'php', '/var/www/html/artisan' ]
+    networks:
+      - laravel
